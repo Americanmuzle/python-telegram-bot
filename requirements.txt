@@ -43,3 +43,4 @@ urllib3==2.1.0
 websockets==11.0.3
 yarl==1.9.4
 apscheduler==3.8.1
+uvicorn~=0.23.2
