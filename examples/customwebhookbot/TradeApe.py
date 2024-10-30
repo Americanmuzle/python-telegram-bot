@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 TOKEN = '7654506914:AAHbKM7zHvsoXv4yPGoVdiF7qVp6R9V79S8'
-WEBHOOK_URL = "https://tradeape-bot.onrender.com/webhook"  # Replace with your actual URL
+WEBHOOK_URL = "https://tradeape.onrender.com/webhook"  # Replace with your actual URL
 PORT = 8000
 
 # Initialize Telegram bot application
