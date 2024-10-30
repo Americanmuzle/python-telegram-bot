@@ -17,3 +17,9 @@ flaky>=3.8.1
 
 # used in test_official for parsing tg docs
 beautifulsoup4
+
+flask
+flask[async]
+asgiref
+uvicorn
+python-telegram-bot
