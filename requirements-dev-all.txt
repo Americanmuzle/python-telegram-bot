@@ -4,3 +4,8 @@ pre-commit
 -r requirements-unit-tests.txt
 -r docs/requirements-docs.txt
 -r requirements.txt
+flask
+flask[async]
+asgiref
+uvicorn
+python-telegram-bot
