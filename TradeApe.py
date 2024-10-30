@@ -1,14 +1,11 @@
 import asyncio
-import json
 import logging
-from django.conf import settings
-from django.core.asgi import get_asgi_application
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
-from django.urls import path
+from flask import Flask, Response, request, abort
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from uuid import uuid4
+from asgiref.wsgi import WsgiToAsgi
 import uvicorn
+from http import HTTPStatus
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -16,11 +13,14 @@ logger = logging.getLogger(__name__)
 
 # Constants
 TOKEN = '7654506914:AAHbKM7zHvsoXv4yPGoVdiF7qVp6R9V79S8'
-WEBHOOK_URL = "https://tradeape.onrender.com"  # Update with actual URL
+WEBHOOK_URL = "https://tradeape.onrender.com/webhook"  # Replace with your actual URL
 PORT = 8000
 
 # Initialize Telegram bot application
 telegram_app = Application.builder().token(TOKEN).build()
+
+# Initialize Flask app
+flask_app = Flask(__name__)
 
 # Command Handlers
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,47 +46,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response: str = handle_response(text)
     await update.message.reply_text(response)
 
-# Webhook endpoint to process incoming updates
-async def telegram(request: HttpRequest) -> HttpResponse:
+# Webhook route
+@flask_app.post("/telegram")
+async def telegram_webhook() -> Response:
     """Process incoming updates from Telegram."""
-    await telegram_app.update_queue.put(
-        Update.de_json(data=json.loads(request.body), bot=telegram_app.bot)
-    )
-    return HttpResponse()
+    await telegram_app.update_queue.put(Update.de_json(data=request.json, bot=telegram_app.bot))
+    return Response(status=HTTPStatus.OK)
 
-# Health check endpoint
-async def healthcheck(_: HttpRequest) -> HttpResponse:
-    return HttpResponse("The bot is still running fine :)")
+# Health check route
+@flask_app.route("/healthcheck")
+async def healthcheck() -> Response:
+    return Response("The bot is still running fine :)", status=HTTPStatus.OK)
 
-# Set URL paths for Django
-urlpatterns = [
-    path("telegram", telegram, name="Telegram updates"),
-    path("healthcheck", healthcheck, name="Health check"),
-]
+# Set webhook route
+@flask_app.route("/set_webhook")
+async def set_webhook():
+    success = await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/telegram")
+    if success:
+        logger.info("Webhook set successfully.")
+        return Response("Webhook set successfully!", status=HTTPStatus.OK)
+    else:
+        logger.error("Webhook setup failed.")
+        return Response("Webhook setup failed!", status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-# Configure Django settings
-settings.configure(ROOT_URLCONF=__name__, SECRET_KEY=uuid4().hex)
-
-# Main function to run bot and server
-async def main() -> None:
-    # Register command and message handlers
-    telegram_app.add_handler(CommandHandler("start", start_command))
-    telegram_app.add_handler(CommandHandler("help", help_command))
+# Run the bot application and web server together
+async def main():
+    telegram_app.add_handler(CommandHandler('start', start_command))
+    telegram_app.add_handler(CommandHandler('help', help_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT, handle_message))
-
-    # Set webhook for Telegram
-    await telegram_app.bot.set_webhook(url=f"{WEBHOOK_URL}/telegram")
-
-    # Set up ASGI server
+    
     webserver = uvicorn.Server(
-        config=uvicorn.Config(app=get_asgi_application(), port=PORT, host="0.0.0.0")
+        config=uvicorn.Config(app=WsgiToAsgi(flask_app), port=PORT, host="0.0.0.0")
     )
-
-    # Run the bot and server
+    
+    # Start both application and webserver
     async with telegram_app:
         await telegram_app.start()
         await webserver.serve()
         await telegram_app.stop()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     asyncio.run(main())
